@@ -11,9 +11,10 @@ import urllib.request
 from datetime import datetime
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Security, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.security import APIKeyHeader
 from pydantic import BaseModel
 
 from reportlab.lib import colors
@@ -71,6 +72,23 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ─── Autenticação API Key ───────────────────────────────────────────
+
+API_KEY = os.environ.get("API_KEY", "")
+
+api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+
+async def verificar_api_key(api_key: str = Security(api_key_header)):
+    """Valida a API Key enviada no header X-API-Key."""
+    if not API_KEY:
+        # Se não configurou API_KEY no servidor, aceita qualquer request
+        return api_key
+    if api_key != API_KEY:
+        raise HTTPException(status_code=401, detail="API Key inválida ou ausente")
+    return api_key
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────
@@ -389,7 +407,7 @@ def gerar_pdf(os_data: OrdemServico) -> bytes:
 # ─── Endpoints ───────────────────────────────────────────────────────
 
 @app.post("/gerar-os")
-async def gerar_ordem_servico(os_data: OrdemServico):
+async def gerar_ordem_servico(os_data: OrdemServico, _key: str = Depends(verificar_api_key)):
     """
     Gera PDF da Ordem de Serviço e retorna em base64.
 
@@ -411,7 +429,7 @@ async def gerar_ordem_servico(os_data: OrdemServico):
 
 
 @app.post("/gerar-os/download")
-async def gerar_ordem_servico_download(os_data: OrdemServico):
+async def gerar_ordem_servico_download(os_data: OrdemServico, _key: str = Depends(verificar_api_key)):
     """
     Gera PDF e retorna diretamente como arquivo para download.
     Útil para testes diretos no navegador/Swagger.
