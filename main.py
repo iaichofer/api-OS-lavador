@@ -53,8 +53,8 @@ class OrdemServico(BaseModel):
     data_realizacao: str
     latitude: Optional[str] = ""
     longitude: Optional[str] = ""
-    fotos: list[Foto] = []
-    servicos: list[Servico] = []
+    fotos: Optional[list[Foto]] = []
+    servicos: Optional[list[Servico]] = []
     empresa: Optional[EmpresaInfo] = None
 
 
@@ -135,15 +135,83 @@ def draw_rounded_rect(c: canvas.Canvas, x, y, w, h, radius=8, stroke=True, fill=
     c.roundRect(x, y, w, h, radius, stroke=int(stroke), fill=int(fill))
 
 
-def draw_section_header(c: canvas.Canvas, x, y, w, titulo, icon_char=None):
+def draw_icon_clipboard(c, cx, cy, size=10):
+    """Desenha ícone de prancheta (Ordem de Serviço)."""
+    s = size
+    c.setStrokeColor(colors.Color(0.45, 0.45, 0.45))
+    c.setFillColor(colors.Color(0.45, 0.45, 0.45))
+    c.setLineWidth(1.2)
+    # Corpo da prancheta
+    c.roundRect(cx - s*0.4, cy - s*0.5, s*0.8, s, 1.5, stroke=1, fill=0)
+    # Clip no topo
+    c.roundRect(cx - s*0.2, cy + s*0.35, s*0.4, s*0.25, 1, stroke=1, fill=1)
+    # Linhas de texto
+    c.setLineWidth(0.8)
+    for i in range(3):
+        ly = cy + s*0.15 - i * s*0.25
+        c.line(cx - s*0.25, ly, cx + s*0.25, ly)
+
+
+def draw_icon_camera(c, cx, cy, size=10):
+    """Desenha ícone de câmera (Fotos)."""
+    s = size
+    c.setStrokeColor(colors.Color(0.45, 0.45, 0.45))
+    c.setFillColor(colors.Color(0.45, 0.45, 0.45))
+    c.setLineWidth(1.2)
+    # Corpo da câmera
+    c.roundRect(cx - s*0.5, cy - s*0.35, s, s*0.65, 2, stroke=1, fill=0)
+    # Lente (círculo)
+    c.circle(cx, cy - s*0.05, s*0.2, stroke=1, fill=0)
+    # Flash no topo
+    c.setLineWidth(0.8)
+    c.line(cx - s*0.15, cy + s*0.3, cx + s*0.15, cy + s*0.3)
+    c.line(cx - s*0.15, cy + s*0.3, cx - s*0.15, cy + s*0.42)
+    c.line(cx - s*0.15, cy + s*0.42, cx + s*0.15, cy + s*0.42)
+
+
+def draw_icon_wrench(c, cx, cy, size=10):
+    """Desenha ícone de checklist/serviços."""
+    s = size
+    c.setStrokeColor(colors.Color(0.45, 0.45, 0.45))
+    c.setFillColor(colors.Color(0.45, 0.45, 0.45))
+    c.setLineWidth(1.2)
+    # Três checkmarks com linhas
+    for i in range(3):
+        ly = cy + s*0.35 - i * s*0.35
+        # Check
+        c.setLineWidth(1.4)
+        c.line(cx - s*0.4, ly, cx - s*0.3, ly - s*0.1)
+        c.line(cx - s*0.3, ly - s*0.1, cx - s*0.15, ly + s*0.1)
+        # Linha de texto
+        c.setLineWidth(0.8)
+        c.line(cx - s*0.05, ly, cx + s*0.4, ly)
+
+
+def draw_section_header(c: canvas.Canvas, x, y, w, titulo, icon_type=None):
     """Desenha cabeçalho de seção com ícone e título."""
     # Fundo cinza claro no header
     c.setFillColor(colors.Color(0.96, 0.96, 0.96))
     c.roundRect(x, y - 2, w, 28, 6, stroke=0, fill=1)
 
-    # Ícone (quadrado cinza)
+    # Ícone (quadrado cinza com ícone dentro)
+    icon_x = x + 10
+    icon_y = y + 2
+    icon_w = 22
+    icon_h = 22
     c.setFillColor(colors.Color(0.85, 0.85, 0.85))
-    c.roundRect(x + 10, y + 2, 22, 22, 4, stroke=0, fill=1)
+    c.roundRect(icon_x, icon_y, icon_w, icon_h, 4, stroke=0, fill=1)
+
+    # Desenha ícone dentro do quadrado
+    icon_cx = icon_x + icon_w / 2
+    icon_cy = icon_y + icon_h / 2
+    c.saveState()
+    if icon_type == "clipboard":
+        draw_icon_clipboard(c, icon_cx, icon_cy, size=9)
+    elif icon_type == "camera":
+        draw_icon_camera(c, icon_cx, icon_cy, size=9)
+    elif icon_type == "checklist":
+        draw_icon_wrench(c, icon_cx, icon_cy, size=9)
+    c.restoreState()
 
     # Título
     c.setFillColor(colors.Color(0.15, 0.15, 0.15))
@@ -161,6 +229,12 @@ def gerar_pdf(os_data: OrdemServico) -> bytes:
     c = canvas.Canvas(buffer, pagesize=A4)
 
     empresa = os_data.empresa or EmpresaInfo()
+
+    # Garante que fotos e servicos nunca sejam None
+    if os_data.fotos is None:
+        os_data.fotos = []
+    if os_data.servicos is None:
+        os_data.servicos = []
 
     margin_x = 40
     content_w = width - 2 * margin_x
@@ -226,7 +300,7 @@ def gerar_pdf(os_data: OrdemServico) -> bytes:
 
     # Header da seção
     draw_section_header(c, margin_x, y_cursor + os_section_h - 30, content_w,
-                        f"Ordem de serviço - {os_data.numero_os}")
+                        f"Ordem de serviço - {os_data.numero_os}", icon_type="clipboard")
 
     # Campos - Coluna esquerda
     campos_y = y_cursor + os_section_h - 52
@@ -310,7 +384,7 @@ def gerar_pdf(os_data: OrdemServico) -> bytes:
 
         # Header
         draw_section_header(c, margin_x, y_cursor + fotos_section_h - 30, content_w,
-                            "Fotos registradas")
+                            "Fotos registradas", icon_type="camera")
 
         # Fotos
         for i, foto in enumerate(os_data.fotos):
@@ -363,7 +437,7 @@ def gerar_pdf(os_data: OrdemServico) -> bytes:
 
         # Header
         draw_section_header(c, margin_x, y_cursor + servicos_section_h - 30, content_w,
-                            "Serviços realizados")
+                            "Serviços realizados", icon_type="checklist")
 
         # Cabeçalho da tabela
         table_y = y_cursor + servicos_section_h - 50
