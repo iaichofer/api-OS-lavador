@@ -15,7 +15,7 @@ from fastapi import FastAPI, HTTPException, Security, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.security import APIKeyHeader
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
@@ -46,16 +46,38 @@ class EmpresaInfo(BaseModel):
 
 class OrdemServico(BaseModel):
     numero_os: str
-    cnpj_cliente: str
-    razao_social: str
-    placa_cavalo: str
+    cnpj_cliente: str = ""
+    razao_social: str = ""
+    placa_cavalo: str = ""
     placa_carreta: Optional[str] = ""
-    data_realizacao: str
+    data_realizacao: str = ""
     latitude: Optional[str] = ""
     longitude: Optional[str] = ""
     fotos: Optional[list[Foto]] = []
     servicos: Optional[list[Servico]] = []
     empresa: Optional[EmpresaInfo] = None
+
+    @field_validator("fotos", mode="before")
+    @classmethod
+    def fotos_nunca_none(cls, v):
+        if v is None:
+            return []
+        return v
+
+    @field_validator("servicos", mode="before")
+    @classmethod
+    def servicos_nunca_none(cls, v):
+        if v is None:
+            return []
+        return v
+
+    @field_validator("placa_carreta", "latitude", "longitude", "cnpj_cliente",
+                     "razao_social", "placa_cavalo", "data_realizacao", mode="before")
+    @classmethod
+    def string_nunca_none(cls, v):
+        if v is None:
+            return ""
+        return v
 
 
 # ─── App FastAPI ─────────────────────────────────────────────────────
