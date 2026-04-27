@@ -62,6 +62,8 @@ class OrdemServico(BaseModel):
     def fotos_nunca_none(cls, v):
         if v is None:
             return []
+        if isinstance(v, list):
+            return [item for item in v if item is not None]
         return v
 
     @field_validator("servicos", mode="before")
@@ -69,6 +71,8 @@ class OrdemServico(BaseModel):
     def servicos_nunca_none(cls, v):
         if v is None:
             return []
+        if isinstance(v, list):
+            return [item for item in v if item is not None]
         return v
 
     @field_validator("placa_carreta", "latitude", "longitude", "cnpj_cliente",
