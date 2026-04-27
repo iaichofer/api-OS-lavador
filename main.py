@@ -151,6 +151,25 @@ def load_logo(empresa: EmpresaInfo) -> Optional[ImageReader]:
     return None
 
 
+def draw_text_fit(c: canvas.Canvas, x: float, y: float, texto: str, max_width: float,
+                   font_name: str = "Helvetica", max_size: float = 8.5, min_size: float = 5.5):
+    """Desenha texto reduzindo a fonte automaticamente para caber na largura."""
+    if not texto:
+        return
+    size = max_size
+    while size >= min_size:
+        c.setFont(font_name, size)
+        if c.stringWidth(texto) <= max_width:
+            c.drawString(x, y, texto)
+            return
+        size -= 0.5
+    # Se ainda não coube com a fonte mínima, trunca
+    c.setFont(font_name, min_size)
+    while len(texto) > 0 and c.stringWidth(texto + "...") > max_width:
+        texto = texto[:-1]
+    c.drawString(x, y, texto + "...")
+
+
 def formatar_valor(valor: float) -> str:
     """Formata valor em reais: R$1.234,56"""
     return f"R${valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
@@ -304,8 +323,10 @@ def gerar_pdf(os_data: OrdemServico) -> bytes:
     info_y = y_cursor + header_h - 28
 
     c.setFillColor(colors.Color(0.2, 0.2, 0.2))
-    c.setFont("Helvetica-Bold", 10)
-    c.drawString(info_x, info_y, f"{empresa.nome} - {empresa.cnpj}")
+    empresa_text = f"{empresa.nome} - {empresa.cnpj}"
+    max_empresa_w = margin_x + content_w - info_x - 15
+    draw_text_fit(c, info_x, info_y, empresa_text, max_empresa_w,
+                  font_name="Helvetica-Bold", max_size=10, min_size=7)
 
     c.setFont("Helvetica", 9)
     c.setFillColor(colors.Color(0.35, 0.35, 0.35))
@@ -331,14 +352,14 @@ def gerar_pdf(os_data: OrdemServico) -> bytes:
     # Campos - Coluna esquerda
     campos_y = y_cursor + os_section_h - 52
     col1_x = margin_x + 15
-    col2_x = margin_x + content_w / 2 + 10
+    col2_x = margin_x + content_w * 0.33
 
     c.setFont("Helvetica-Bold", 8.5)
     c.setFillColor(colors.Color(0.2, 0.2, 0.2))
-    c.drawString(col1_x, campos_y, "CNPJ Cliente: ")
+    c.drawString(col1_x, campos_y, "CNPJ: ")
     c.setFont("Helvetica", 8.5)
     c.setFillColor(colors.Color(0.4, 0.4, 0.4))
-    c.drawString(col1_x + 75, campos_y, os_data.cnpj_cliente)
+    c.drawString(col1_x + 70, campos_y, os_data.cnpj_cliente)
 
     campos_y -= 16
     c.setFont("Helvetica-Bold", 8.5)
@@ -346,24 +367,26 @@ def gerar_pdf(os_data: OrdemServico) -> bytes:
     c.drawString(col1_x, campos_y, "Placa cavalo: ")
     c.setFont("Helvetica", 8.5)
     c.setFillColor(colors.Color(0.4, 0.4, 0.4))
-    c.drawString(col1_x + 75, campos_y, os_data.placa_cavalo)
+    c.drawString(col1_x + 70, campos_y, os_data.placa_cavalo)
 
     campos_y -= 16
     c.setFont("Helvetica-Bold", 8.5)
     c.setFillColor(colors.Color(0.2, 0.2, 0.2))
-    c.drawString(col1_x, campos_y, "Data realização: ")
+    c.drawString(col1_x, campos_y, "Data: ")
     c.setFont("Helvetica", 8.5)
     c.setFillColor(colors.Color(0.4, 0.4, 0.4))
-    c.drawString(col1_x + 85, campos_y, os_data.data_realizacao)
+    c.drawString(col1_x + 70, campos_y, os_data.data_realizacao)
 
     # Campos - Coluna direita
     campos_y = y_cursor + os_section_h - 52
+    val_x = col2_x + 70
+    max_col2_w = margin_x + content_w - val_x - 10
+
     c.setFont("Helvetica-Bold", 8.5)
     c.setFillColor(colors.Color(0.2, 0.2, 0.2))
     c.drawString(col2_x, campos_y, "Razão Social: ")
-    c.setFont("Helvetica", 8.5)
     c.setFillColor(colors.Color(0.4, 0.4, 0.4))
-    c.drawString(col2_x + 75, campos_y, os_data.razao_social)
+    draw_text_fit(c, val_x, campos_y, os_data.razao_social, max_col2_w)
 
     campos_y -= 16
     c.setFont("Helvetica-Bold", 8.5)
@@ -371,7 +394,7 @@ def gerar_pdf(os_data: OrdemServico) -> bytes:
     c.drawString(col2_x, campos_y, "Placa carreta: ")
     c.setFont("Helvetica", 8.5)
     c.setFillColor(colors.Color(0.4, 0.4, 0.4))
-    c.drawString(col2_x + 75, campos_y, os_data.placa_carreta or "")
+    c.drawString(val_x, campos_y, os_data.placa_carreta or "")
 
     campos_y -= 16
     loc_text = ""
@@ -380,9 +403,8 @@ def gerar_pdf(os_data: OrdemServico) -> bytes:
     c.setFont("Helvetica-Bold", 8.5)
     c.setFillColor(colors.Color(0.2, 0.2, 0.2))
     c.drawString(col2_x, campos_y, "Loc.: ")
-    c.setFont("Helvetica", 8.5)
     c.setFillColor(colors.Color(0.4, 0.4, 0.4))
-    c.drawString(col2_x + 30, campos_y, loc_text)
+    draw_text_fit(c, col2_x + 25, campos_y, loc_text, max_col2_w + 45)
 
     y_cursor -= 15
 
