@@ -616,7 +616,7 @@ def gerar_pdf_fechamento(dados: Fechamento) -> bytes:
     # ═══════════════════════════════════════════════════════════════
     # CAPA: DADOS DO CLIENTE E PERÍODO
     # ═══════════════════════════════════════════════════════════════
-    info_section_h = 85
+    info_section_h = 100
     y_cursor -= info_section_h
 
     c.setStrokeColor(colors.Color(0.85, 0.85, 0.85))
@@ -624,13 +624,13 @@ def gerar_pdf_fechamento(dados: Fechamento) -> bytes:
     draw_rounded_rect(c, margin_x, y_cursor, content_w, info_section_h, radius=8)
 
     # Linha 1: CNPJ + Razão Social
-    line1_y = y_cursor + info_section_h - 22
+    line1_y = y_cursor + info_section_h - 20
     c.setFont("Helvetica-Bold", 8.5)
     c.setFillColor(colors.Color(0.2, 0.2, 0.2))
     c.drawString(margin_x + 15, line1_y, "CNPJ Cliente")
     c.setFont("Helvetica", 8.5)
     c.setFillColor(colors.Color(0.4, 0.4, 0.4))
-    c.drawString(margin_x + 15, line1_y - 14, dados.cnpj_cliente)
+    c.drawString(margin_x + 15, line1_y - 15, dados.cnpj_cliente)
 
     col2_info = margin_x + content_w * 0.33
     c.setFont("Helvetica-Bold", 8.5)
@@ -638,12 +638,12 @@ def gerar_pdf_fechamento(dados: Fechamento) -> bytes:
     c.drawString(col2_info, line1_y, "Razão Social Cliente")
     c.setFillColor(colors.Color(0.4, 0.4, 0.4))
     max_rs_w = margin_x + content_w - col2_info - 15
-    draw_text_fit(c, col2_info, line1_y - 14, dados.razao_social, max_rs_w)
+    draw_text_fit(c, col2_info, line1_y - 15, dados.razao_social, max_rs_w)
 
-    # Separador (abaixo do texto com folga)
-    c.setStrokeColor(colors.Color(0.9, 0.9, 0.9))
+    # Separador horizontal (com boa folga dos textos)
+    c.setStrokeColor(colors.Color(0.85, 0.85, 0.85))
     c.setLineWidth(0.5)
-    sep_y = line1_y - 14 - 10
+    sep_y = y_cursor + info_section_h / 2
     c.line(margin_x + 15, sep_y, margin_x + content_w - 15, sep_y)
 
     # Linha 2: Valor total + Período + Data fechamento
@@ -654,32 +654,33 @@ def gerar_pdf_fechamento(dados: Fechamento) -> bytes:
             for s in ordem.servicos:
                 valor_total += s.valor
 
-    line2_y = sep_y - 16
-    col_w = content_w / 3
+    line2_y = sep_y - 14
+
+    # Colunas alinhadas: col1 = mesma da linha 1, col2 = mesma da Razão Social, col3 = 66%
+    col1_x = margin_x + 15
+    col3_x = margin_x + content_w * 0.66
 
     c.setFont("Helvetica-Bold", 8.5)
     c.setFillColor(colors.Color(0.2, 0.2, 0.2))
-    c.drawString(margin_x + 15, line2_y, "Valor total")
+    c.drawString(col1_x, line2_y, "Valor total")
     c.setFont("Helvetica", 8.5)
     c.setFillColor(colors.Color(0.4, 0.4, 0.4))
-    c.drawString(margin_x + 15, line2_y - 14, formatar_valor(valor_total))
+    c.drawString(col1_x, line2_y - 15, formatar_valor(valor_total))
 
-    periodo_x = margin_x + col_w + 15
     c.setFont("Helvetica-Bold", 8.5)
     c.setFillColor(colors.Color(0.2, 0.2, 0.2))
-    c.drawString(periodo_x, line2_y, "Período")
+    c.drawString(col2_info, line2_y, "Período")
     c.setFont("Helvetica", 8.5)
     c.setFillColor(colors.Color(0.4, 0.4, 0.4))
     periodo_text = f"{dados.periodo_inicio} a {dados.periodo_fim}"
-    c.drawString(periodo_x, line2_y - 14, periodo_text)
+    c.drawString(col2_info, line2_y - 15, periodo_text)
 
-    data_fech_x = margin_x + col_w * 2 + 15
     c.setFont("Helvetica-Bold", 8.5)
     c.setFillColor(colors.Color(0.2, 0.2, 0.2))
-    c.drawString(data_fech_x, line2_y, "Data envio fechamento")
+    c.drawString(col3_x, line2_y, "Data envio fechamento")
     c.setFont("Helvetica", 8.5)
     c.setFillColor(colors.Color(0.4, 0.4, 0.4))
-    c.drawString(data_fech_x, line2_y - 14, dados.data_fechamento)
+    c.drawString(col3_x, line2_y - 15, dados.data_fechamento)
 
     y_cursor -= 15
 
