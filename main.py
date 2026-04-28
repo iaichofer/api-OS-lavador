@@ -616,7 +616,7 @@ def gerar_pdf_fechamento(dados: Fechamento) -> bytes:
     # ═══════════════════════════════════════════════════════════════
     # CAPA: DADOS DO CLIENTE E PERÍODO
     # ═══════════════════════════════════════════════════════════════
-    info_section_h = 70
+    info_section_h = 85
     y_cursor -= info_section_h
 
     c.setStrokeColor(colors.Color(0.85, 0.85, 0.85))
@@ -640,10 +640,10 @@ def gerar_pdf_fechamento(dados: Fechamento) -> bytes:
     max_rs_w = margin_x + content_w - col2_info - 15
     draw_text_fit(c, col2_info, line1_y - 14, dados.razao_social, max_rs_w)
 
-    # Separador
+    # Separador (abaixo do texto com folga)
     c.setStrokeColor(colors.Color(0.9, 0.9, 0.9))
     c.setLineWidth(0.5)
-    sep_y = y_cursor + info_section_h / 2 - 2
+    sep_y = line1_y - 14 - 10
     c.line(margin_x + 15, sep_y, margin_x + content_w - 15, sep_y)
 
     # Linha 2: Valor total + Período + Data fechamento
