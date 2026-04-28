@@ -2,7 +2,7 @@
 API para geração de Ordem de Serviço em PDF - Auto Jato TC Truck
 FastAPI + ReportLab | Retorna PDF em base64 para integração com Bubble
 """
- 
+
 import base64
 import io
 import os
@@ -10,13 +10,13 @@ import tempfile
 import urllib.request
 from datetime import datetime
 from typing import Optional
- 
+
 from fastapi import FastAPI, HTTPException, Security, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.security import APIKeyHeader
 from pydantic import BaseModel, field_validator
- 
+
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm, cm
@@ -24,18 +24,18 @@ from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen import canvas
 from reportlab.lib.enums import TA_LEFT, TA_RIGHT, TA_CENTER
 from reportlab.platypus import Table, TableStyle
- 
+
 # ─── Modelos Pydantic ────────────────────────────────────────────────
- 
+
 class Servico(BaseModel):
     descricao: str
     valor: float
- 
+
 class Foto(BaseModel):
     url: Optional[str] = None      # URL pública da imagem
     base64_data: Optional[str] = None  # Imagem em base64 (sem prefixo data:...)
     legenda: Optional[str] = None
- 
+
 class EmpresaInfo(BaseModel):
     nome: str = "AUTO JATO TC TRUCK LTDA"
     cnpj: str = "51667908000194"
@@ -43,7 +43,7 @@ class EmpresaInfo(BaseModel):
     telefone: str = "(11) 93050-1993 / (11) 95089-6893"
     logo_url: Optional[str] = None
     logo_base64: Optional[str] = None
- 
+
 class OrdemServico(BaseModel):
     numero_os: str
     cnpj_cliente: str = ""
@@ -56,7 +56,7 @@ class OrdemServico(BaseModel):
     fotos: Optional[list[Foto]] = []
     servicos: Optional[list[Servico]] = []
     empresa: Optional[EmpresaInfo] = None
- 
+
     @field_validator("fotos", mode="before")
     @classmethod
     def fotos_nunca_none(cls, v):
@@ -65,7 +65,7 @@ class OrdemServico(BaseModel):
         if isinstance(v, list):
             return [item for item in v if item is not None]
         return v
- 
+
     @field_validator("servicos", mode="before")
     @classmethod
     def servicos_nunca_none(cls, v):
@@ -74,7 +74,7 @@ class OrdemServico(BaseModel):
         if isinstance(v, list):
             return [item for item in v if item is not None]
         return v
- 
+
     @field_validator("placa_carreta", "latitude", "longitude", "cnpj_cliente",
                      "razao_social", "placa_cavalo", "data_realizacao", mode="before")
     @classmethod
@@ -82,8 +82,8 @@ class OrdemServico(BaseModel):
         if v is None:
             return ""
         return v
- 
- 
+
+
 class Fechamento(BaseModel):
     cnpj_cliente: str = ""
     razao_social: str = ""
@@ -92,7 +92,7 @@ class Fechamento(BaseModel):
     data_fechamento: str = ""
     ordens: list[OrdemServico] = []
     empresa: Optional[EmpresaInfo] = None
- 
+
     @field_validator("ordens", mode="before")
     @classmethod
     def ordens_nunca_none(cls, v):
@@ -101,7 +101,7 @@ class Fechamento(BaseModel):
         if isinstance(v, list):
             return [item for item in v if item is not None]
         return v
- 
+
     @field_validator("cnpj_cliente", "razao_social", "periodo_inicio",
                      "periodo_fim", "data_fechamento", mode="before")
     @classmethod
@@ -109,31 +109,31 @@ class Fechamento(BaseModel):
         if v is None:
             return ""
         return v
- 
- 
+
+
 # ─── App FastAPI ─────────────────────────────────────────────────────
- 
+
 app = FastAPI(
     title="Gerador de OS - Auto Jato TC Truck",
     description="API para gerar PDF de Ordem de Serviço a partir de dados JSON",
     version="1.0.0",
 )
- 
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
- 
- 
+
+
 # ─── Autenticação API Key ───────────────────────────────────────────
- 
+
 API_KEY = os.environ.get("API_KEY", "")
- 
+
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
- 
- 
+
+
 async def verificar_api_key(api_key: str = Security(api_key_header)):
     """Valida a API Key enviada no header X-API-Key."""
     if not API_KEY:
@@ -142,10 +142,10 @@ async def verificar_api_key(api_key: str = Security(api_key_header)):
     if api_key != API_KEY:
         raise HTTPException(status_code=401, detail="API Key inválida ou ausente")
     return api_key
- 
- 
+
+
 # ─── Helpers ─────────────────────────────────────────────────────────
- 
+
 def load_image(foto: Foto) -> Optional[ImageReader]:
     """Carrega imagem de URL ou base64 e retorna ImageReader."""
     try:
@@ -160,8 +160,8 @@ def load_image(foto: Foto) -> Optional[ImageReader]:
     except Exception as e:
         print(f"Erro ao carregar imagem: {e}")
     return None
- 
- 
+
+
 def load_logo(empresa: EmpresaInfo) -> Optional[ImageReader]:
     """Carrega logo da empresa de URL ou base64."""
     try:
@@ -176,8 +176,8 @@ def load_logo(empresa: EmpresaInfo) -> Optional[ImageReader]:
     except Exception as e:
         print(f"Erro ao carregar logo: {e}")
     return None
- 
- 
+
+
 def draw_text_fit(c: canvas.Canvas, x: float, y: float, texto: str, max_width: float,
                    font_name: str = "Helvetica", max_size: float = 8.5, min_size: float = 5.5):
     """Desenha texto reduzindo a fonte automaticamente para caber na largura."""
@@ -195,18 +195,18 @@ def draw_text_fit(c: canvas.Canvas, x: float, y: float, texto: str, max_width: f
     while len(texto) > 0 and c.stringWidth(texto + "...") > max_width:
         texto = texto[:-1]
     c.drawString(x, y, texto + "...")
- 
- 
+
+
 def formatar_valor(valor: float) -> str:
     """Formata valor em reais: R$1.234,56"""
     return f"R${valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
- 
- 
+
+
 def draw_rounded_rect(c: canvas.Canvas, x, y, w, h, radius=8, stroke=True, fill=False):
     """Desenha retângulo com bordas arredondadas."""
     c.roundRect(x, y, w, h, radius, stroke=int(stroke), fill=int(fill))
- 
- 
+
+
 def draw_icon_clipboard(c, cx, cy, size=10):
     """Desenha ícone de prancheta (Ordem de Serviço)."""
     s = size
@@ -222,8 +222,8 @@ def draw_icon_clipboard(c, cx, cy, size=10):
     for i in range(3):
         ly = cy + s*0.15 - i * s*0.25
         c.line(cx - s*0.25, ly, cx + s*0.25, ly)
- 
- 
+
+
 def draw_icon_camera(c, cx, cy, size=10):
     """Desenha ícone de câmera (Fotos)."""
     s = size
@@ -239,8 +239,8 @@ def draw_icon_camera(c, cx, cy, size=10):
     c.line(cx - s*0.15, cy + s*0.3, cx + s*0.15, cy + s*0.3)
     c.line(cx - s*0.15, cy + s*0.3, cx - s*0.15, cy + s*0.42)
     c.line(cx - s*0.15, cy + s*0.42, cx + s*0.15, cy + s*0.42)
- 
- 
+
+
 def draw_icon_wrench(c, cx, cy, size=10):
     """Desenha ícone de checklist/serviços."""
     s = size
@@ -257,14 +257,14 @@ def draw_icon_wrench(c, cx, cy, size=10):
         # Linha de texto
         c.setLineWidth(0.8)
         c.line(cx - s*0.05, ly, cx + s*0.4, ly)
- 
- 
+
+
 def draw_section_header(c: canvas.Canvas, x, y, w, titulo, icon_type=None):
     """Desenha cabeçalho de seção com ícone e título."""
     # Fundo cinza claro no header
     c.setFillColor(colors.Color(0.96, 0.96, 0.96))
     c.roundRect(x, y - 2, w, 28, 6, stroke=0, fill=1)
- 
+
     # Ícone (quadrado cinza com ícone dentro)
     icon_x = x + 10
     icon_y = y + 2
@@ -272,7 +272,7 @@ def draw_section_header(c: canvas.Canvas, x, y, w, titulo, icon_type=None):
     icon_h = 22
     c.setFillColor(colors.Color(0.85, 0.85, 0.85))
     c.roundRect(icon_x, icon_y, icon_w, icon_h, 4, stroke=0, fill=1)
- 
+
     # Desenha ícone dentro do quadrado
     icon_cx = icon_x + icon_w / 2
     icon_cy = icon_y + icon_h / 2
@@ -284,52 +284,52 @@ def draw_section_header(c: canvas.Canvas, x, y, w, titulo, icon_type=None):
     elif icon_type == "checklist":
         draw_icon_wrench(c, icon_cx, icon_cy, size=9)
     c.restoreState()
- 
+
     # Título
     c.setFillColor(colors.Color(0.15, 0.15, 0.15))
     c.setFont("Helvetica-Bold", 11)
     c.drawString(x + 40, y + 7, titulo)
- 
- 
+
+
 # ─── Gerador de PDF ──────────────────────────────────────────────────
- 
+
 def gerar_pdf(os_data: OrdemServico) -> bytes:
     """Gera o PDF da Ordem de Serviço e retorna os bytes."""
- 
+
     buffer = io.BytesIO()
     width, height = A4  # 595.27 x 841.89 pontos
     c = canvas.Canvas(buffer, pagesize=A4)
- 
+
     empresa = os_data.empresa or EmpresaInfo()
- 
+
     # Garante que fotos e servicos nunca sejam None
     if os_data.fotos is None:
         os_data.fotos = []
     if os_data.servicos is None:
         os_data.servicos = []
- 
+
     margin_x = 40
     content_w = width - 2 * margin_x
     y_cursor = height - 40  # Topo
- 
+
     # ═══════════════════════════════════════════════════════════════
     # SEÇÃO 1: CABEÇALHO DA EMPRESA
     # ═══════════════════════════════════════════════════════════════
     header_h = 90
     y_cursor -= header_h
- 
+
     # Borda do card
     c.setStrokeColor(colors.Color(0.85, 0.85, 0.85))
     c.setLineWidth(0.8)
     draw_rounded_rect(c, margin_x, y_cursor, content_w, header_h, radius=8)
- 
+
     # Logo
     logo_img = load_logo(empresa)
     logo_x = margin_x + 15
     logo_y = y_cursor + 12
     logo_w = 90
     logo_h = 65
- 
+
     if logo_img:
         try:
             c.drawImage(logo_img, logo_x, logo_y, width=logo_w, height=logo_h,
@@ -344,50 +344,50 @@ def gerar_pdf(os_data: OrdemServico) -> bytes:
         c.setFillColor(colors.Color(0.6, 0.6, 0.6))
         c.setFont("Helvetica", 8)
         c.drawCentredString(logo_x + logo_w / 2, logo_y + logo_h / 2, "LOGO")
- 
+
     # Informações da empresa
     info_x = margin_x + 130
     info_y = y_cursor + header_h - 28
- 
+
     c.setFillColor(colors.Color(0.2, 0.2, 0.2))
     empresa_text = f"{empresa.nome} - {empresa.cnpj}"
     max_empresa_w = margin_x + content_w - info_x - 15
     draw_text_fit(c, info_x, info_y, empresa_text, max_empresa_w,
                   font_name="Helvetica-Bold", max_size=10, min_size=7)
- 
+
     c.setFont("Helvetica", 9)
     c.setFillColor(colors.Color(0.35, 0.35, 0.35))
     c.drawString(info_x, info_y - 18, empresa.endereco)
     c.drawString(info_x, info_y - 34, empresa.telefone)
- 
+
     y_cursor -= 15
- 
+
     # ═══════════════════════════════════════════════════════════════
     # SEÇÃO 2: ORDEM DE SERVIÇO
     # ═══════════════════════════════════════════════════════════════
     os_section_h = 105
     y_cursor -= os_section_h
- 
+
     c.setStrokeColor(colors.Color(0.85, 0.85, 0.85))
     c.setLineWidth(0.8)
     draw_rounded_rect(c, margin_x, y_cursor, content_w, os_section_h, radius=8)
- 
+
     # Header da seção
     draw_section_header(c, margin_x, y_cursor + os_section_h - 30, content_w,
                         f"Ordem de serviço - {os_data.numero_os}", icon_type="clipboard")
- 
+
     # Campos - Coluna esquerda
     campos_y = y_cursor + os_section_h - 52
     col1_x = margin_x + 15
     col2_x = margin_x + content_w * 0.33
- 
+
     c.setFont("Helvetica-Bold", 8.5)
     c.setFillColor(colors.Color(0.2, 0.2, 0.2))
     c.drawString(col1_x, campos_y, "CNPJ: ")
     c.setFont("Helvetica", 8.5)
     c.setFillColor(colors.Color(0.4, 0.4, 0.4))
     c.drawString(col1_x + 70, campos_y, os_data.cnpj_cliente)
- 
+
     campos_y -= 16
     c.setFont("Helvetica-Bold", 8.5)
     c.setFillColor(colors.Color(0.2, 0.2, 0.2))
@@ -395,7 +395,7 @@ def gerar_pdf(os_data: OrdemServico) -> bytes:
     c.setFont("Helvetica", 8.5)
     c.setFillColor(colors.Color(0.4, 0.4, 0.4))
     c.drawString(col1_x + 70, campos_y, os_data.placa_cavalo)
- 
+
     campos_y -= 16
     c.setFont("Helvetica-Bold", 8.5)
     c.setFillColor(colors.Color(0.2, 0.2, 0.2))
@@ -403,18 +403,18 @@ def gerar_pdf(os_data: OrdemServico) -> bytes:
     c.setFont("Helvetica", 8.5)
     c.setFillColor(colors.Color(0.4, 0.4, 0.4))
     c.drawString(col1_x + 70, campos_y, os_data.data_realizacao)
- 
+
     # Campos - Coluna direita
     campos_y = y_cursor + os_section_h - 52
     val_x = col2_x + 70
     max_col2_w = margin_x + content_w - val_x - 10
- 
+
     c.setFont("Helvetica-Bold", 8.5)
     c.setFillColor(colors.Color(0.2, 0.2, 0.2))
     c.drawString(col2_x, campos_y, "Razão Social: ")
     c.setFillColor(colors.Color(0.4, 0.4, 0.4))
     draw_text_fit(c, val_x, campos_y, os_data.razao_social, max_col2_w)
- 
+
     campos_y -= 16
     c.setFont("Helvetica-Bold", 8.5)
     c.setFillColor(colors.Color(0.2, 0.2, 0.2))
@@ -422,7 +422,7 @@ def gerar_pdf(os_data: OrdemServico) -> bytes:
     c.setFont("Helvetica", 8.5)
     c.setFillColor(colors.Color(0.4, 0.4, 0.4))
     c.drawString(val_x, campos_y, os_data.placa_carreta or "")
- 
+
     campos_y -= 16
     loc_text = ""
     if os_data.latitude and os_data.longitude:
@@ -432,9 +432,9 @@ def gerar_pdf(os_data: OrdemServico) -> bytes:
     c.drawString(col2_x, campos_y, "Loc.: ")
     c.setFillColor(colors.Color(0.4, 0.4, 0.4))
     draw_text_fit(c, col2_x + 25, campos_y, loc_text, max_col2_w + 45)
- 
+
     y_cursor -= 15
- 
+
     # ═══════════════════════════════════════════════════════════════
     # SEÇÃO 3: FOTOS REGISTRADAS
     # ═══════════════════════════════════════════════════════════════
@@ -445,29 +445,29 @@ def gerar_pdf(os_data: OrdemServico) -> bytes:
         foto_h = foto_w * 0.7  # Proporção
         num_rows = (num_fotos + fotos_per_row - 1) // fotos_per_row
         fotos_section_h = 40 + num_rows * (foto_h + 15) + 10
- 
+
         # Verifica se cabe na página
         if y_cursor - fotos_section_h < 60:
             c.showPage()
             y_cursor = height - 40
- 
+
         y_cursor -= fotos_section_h
- 
+
         c.setStrokeColor(colors.Color(0.85, 0.85, 0.85))
         c.setLineWidth(0.8)
         draw_rounded_rect(c, margin_x, y_cursor, content_w, fotos_section_h, radius=8)
- 
+
         # Header
         draw_section_header(c, margin_x, y_cursor + fotos_section_h - 30, content_w,
                             "Fotos registradas", icon_type="camera")
- 
+
         # Fotos
         for i, foto in enumerate(os_data.fotos):
             row = i // fotos_per_row
             col = i % fotos_per_row
             fx = margin_x + 20 + col * (foto_w + 10)
             fy = y_cursor + fotos_section_h - 50 - row * (foto_h + 15)
- 
+
             img = load_image(foto)
             if img:
                 try:
@@ -489,43 +489,43 @@ def gerar_pdf(os_data: OrdemServico) -> bytes:
                 c.setFillColor(colors.Color(0.6, 0.6, 0.6))
                 c.setFont("Helvetica", 8)
                 c.drawCentredString(fx + foto_w / 2, fy - foto_h / 2, "Foto indisponível")
- 
+
         y_cursor -= 15
- 
+
     # ═══════════════════════════════════════════════════════════════
     # SEÇÃO 4: SERVIÇOS REALIZADOS
     # ═══════════════════════════════════════════════════════════════
     if os_data.servicos:
         num_servicos = len(os_data.servicos)
         servicos_section_h = 45 + num_servicos * 22 + 30  # header + linhas + total
- 
+
         # Verifica se cabe na página
         if y_cursor - servicos_section_h < 60:
             c.showPage()
             y_cursor = height - 40
- 
+
         y_cursor -= servicos_section_h
- 
+
         c.setStrokeColor(colors.Color(0.85, 0.85, 0.85))
         c.setLineWidth(0.8)
         draw_rounded_rect(c, margin_x, y_cursor, content_w, servicos_section_h, radius=8)
- 
+
         # Header
         draw_section_header(c, margin_x, y_cursor + servicos_section_h - 30, content_w,
                             "Serviços realizados", icon_type="checklist")
- 
+
         # Cabeçalho da tabela
         table_y = y_cursor + servicos_section_h - 50
         c.setFont("Helvetica-Bold", 8.5)
         c.setFillColor(colors.Color(0.35, 0.35, 0.35))
         c.drawString(margin_x + 20, table_y, "Descrição")
         c.drawRightString(margin_x + content_w - 20, table_y, "Valor")
- 
+
         # Linha separadora
         c.setStrokeColor(colors.Color(0.9, 0.9, 0.9))
         c.setLineWidth(0.5)
         c.line(margin_x + 15, table_y - 5, margin_x + content_w - 15, table_y - 5)
- 
+
         # Itens
         total = 0.0
         item_y = table_y - 22
@@ -535,55 +535,55 @@ def gerar_pdf(os_data: OrdemServico) -> bytes:
             c.drawString(margin_x + 20, item_y, servico.descricao)
             c.drawRightString(margin_x + content_w - 20, item_y, formatar_valor(servico.valor))
             total += servico.valor
- 
+
             # Linha separadora leve
             c.setStrokeColor(colors.Color(0.93, 0.93, 0.93))
             c.line(margin_x + 15, item_y - 6, margin_x + content_w - 15, item_y - 6)
- 
+
             item_y -= 22
- 
+
         # Total
         c.setFont("Helvetica-Bold", 10)
         c.setFillColor(colors.Color(0.15, 0.15, 0.15))
         c.drawRightString(margin_x + content_w - 20, item_y, formatar_valor(total))
- 
+
     # Finalizar
     c.save()
     buffer.seek(0)
     return buffer.read()
- 
- 
+
+
 # ─── Gerador de PDF Fechamento ──────────────────────────────────────
- 
+
 def gerar_pdf_fechamento(dados: Fechamento) -> bytes:
     """Gera PDF consolidado de fechamento: capa + cada OS em página separada."""
- 
+
     buffer = io.BytesIO()
     width, height = A4
     c = canvas.Canvas(buffer, pagesize=A4)
- 
+
     empresa = dados.empresa or EmpresaInfo()
     margin_x = 40
     content_w = width - 2 * margin_x
     y_cursor = height - 40
- 
+
     # ═══════════════════════════════════════════════════════════════
     # CAPA: CABEÇALHO DA EMPRESA
     # ═══════════════════════════════════════════════════════════════
     header_h = 90
     y_cursor -= header_h
- 
+
     c.setStrokeColor(colors.Color(0.85, 0.85, 0.85))
     c.setLineWidth(0.8)
     draw_rounded_rect(c, margin_x, y_cursor, content_w, header_h, radius=8)
- 
+
     # Logo
     logo_img = load_logo(empresa)
     logo_x = margin_x + 15
     logo_y = y_cursor + 12
     logo_w = 90
     logo_h = 65
- 
+
     if logo_img:
         try:
             c.drawImage(logo_img, logo_x, logo_y, width=logo_w, height=logo_h,
@@ -597,7 +597,7 @@ def gerar_pdf_fechamento(dados: Fechamento) -> bytes:
         c.setFillColor(colors.Color(0.6, 0.6, 0.6))
         c.setFont("Helvetica", 8)
         c.drawCentredString(logo_x + logo_w / 2, logo_y + logo_h / 2, "LOGO")
- 
+
     info_x = margin_x + 130
     info_y = y_cursor + header_h - 28
     c.setFillColor(colors.Color(0.2, 0.2, 0.2))
@@ -605,24 +605,24 @@ def gerar_pdf_fechamento(dados: Fechamento) -> bytes:
     max_empresa_w = margin_x + content_w - info_x - 15
     draw_text_fit(c, info_x, info_y, empresa_text, max_empresa_w,
                   font_name="Helvetica-Bold", max_size=10, min_size=7)
- 
+
     c.setFont("Helvetica", 9)
     c.setFillColor(colors.Color(0.35, 0.35, 0.35))
     c.drawString(info_x, info_y - 18, empresa.endereco)
     c.drawString(info_x, info_y - 34, empresa.telefone)
- 
+
     y_cursor -= 15
- 
+
     # ═══════════════════════════════════════════════════════════════
     # CAPA: DADOS DO CLIENTE E PERÍODO
     # ═══════════════════════════════════════════════════════════════
     info_section_h = 100
     y_cursor -= info_section_h
- 
+
     c.setStrokeColor(colors.Color(0.85, 0.85, 0.85))
     c.setLineWidth(0.8)
     draw_rounded_rect(c, margin_x, y_cursor, content_w, info_section_h, radius=8)
- 
+
     # Linha 1: CNPJ + Razão Social
     line1_y = y_cursor + info_section_h - 20
     c.setFont("Helvetica-Bold", 8.5)
@@ -631,7 +631,7 @@ def gerar_pdf_fechamento(dados: Fechamento) -> bytes:
     c.setFont("Helvetica", 8.5)
     c.setFillColor(colors.Color(0.4, 0.4, 0.4))
     c.drawString(margin_x + 15, line1_y - 15, dados.cnpj_cliente)
- 
+
     col2_info = margin_x + content_w * 0.33
     c.setFont("Helvetica-Bold", 8.5)
     c.setFillColor(colors.Color(0.2, 0.2, 0.2))
@@ -639,13 +639,13 @@ def gerar_pdf_fechamento(dados: Fechamento) -> bytes:
     c.setFillColor(colors.Color(0.4, 0.4, 0.4))
     max_rs_w = margin_x + content_w - col2_info - 15
     draw_text_fit(c, col2_info, line1_y - 15, dados.razao_social, max_rs_w)
- 
+
     # Separador horizontal (com boa folga dos textos)
     c.setStrokeColor(colors.Color(0.85, 0.85, 0.85))
     c.setLineWidth(0.5)
     sep_y = y_cursor + info_section_h / 2
     c.line(margin_x + 15, sep_y, margin_x + content_w - 15, sep_y)
- 
+
     # Linha 2: Valor total + Período + Data fechamento
     # Calcular valor total
     valor_total = 0.0
@@ -653,20 +653,20 @@ def gerar_pdf_fechamento(dados: Fechamento) -> bytes:
         if ordem.servicos:
             for s in ordem.servicos:
                 valor_total += s.valor
- 
+
     line2_y = sep_y - 14
- 
+
     # Colunas alinhadas: col1 = mesma da linha 1, col2 = mesma da Razão Social, col3 = 66%
     col1_x = margin_x + 15
     col3_x = margin_x + content_w * 0.66
- 
+
     c.setFont("Helvetica-Bold", 8.5)
     c.setFillColor(colors.Color(0.2, 0.2, 0.2))
     c.drawString(col1_x, line2_y, "Valor total")
     c.setFont("Helvetica", 8.5)
     c.setFillColor(colors.Color(0.4, 0.4, 0.4))
     c.drawString(col1_x, line2_y - 15, formatar_valor(valor_total))
- 
+
     c.setFont("Helvetica-Bold", 8.5)
     c.setFillColor(colors.Color(0.2, 0.2, 0.2))
     c.drawString(col2_info, line2_y, "Período")
@@ -674,20 +674,20 @@ def gerar_pdf_fechamento(dados: Fechamento) -> bytes:
     c.setFillColor(colors.Color(0.4, 0.4, 0.4))
     periodo_text = f"{dados.periodo_inicio} a {dados.periodo_fim}"
     c.drawString(col2_info, line2_y - 15, periodo_text)
- 
+
     c.setFont("Helvetica-Bold", 8.5)
     c.setFillColor(colors.Color(0.2, 0.2, 0.2))
     c.drawString(col3_x, line2_y, "Data envio fechamento")
     c.setFont("Helvetica", 8.5)
     c.setFillColor(colors.Color(0.4, 0.4, 0.4))
     c.drawString(col3_x, line2_y - 15, dados.data_fechamento)
- 
+
     y_cursor -= 15
- 
+
     # ═══════════════════════════════════════════════════════════════
     # CAPA: TABELA DE SERVIÇOS REALIZADOS
     # ═══════════════════════════════════════════════════════════════
- 
+
     # Montar lista de serviços (cada serviço de cada OS = uma linha)
     linhas_servicos = []
     for ordem in dados.ordens:
@@ -702,21 +702,21 @@ def gerar_pdf_fechamento(dados: Fechamento) -> bytes:
                     "servico": s.descricao,
                     "valor": s.valor,
                 })
- 
+
     num_linhas = len(linhas_servicos)
     row_h = 28
-    header_table_h = 30
+    header_table_h = 38
     section_header_h = 35
- 
+
     # Calcular quantas linhas cabem na primeira página
     espaco_disponivel = y_cursor - 60  # margem inferior
     linhas_primeira_pag = max(0, int((espaco_disponivel - section_header_h - header_table_h) / row_h))
- 
+
     def draw_servicos_header(c, y, margin_x, content_w):
         """Desenha o cabeçalho da tabela de serviços."""
         draw_section_header(c, margin_x, y, content_w,
                             "Serviços realizados", icon_type="checklist")
- 
+
     def draw_table_header(c, y, margin_x):
         """Desenha os títulos das colunas."""
         c.setFont("Helvetica-Bold", 7.5)
@@ -729,9 +729,9 @@ def gerar_pdf_fechamento(dados: Fechamento) -> bytes:
         c.drawRightString(margin_x + content_w - 15, y, "Valor")
         c.setStrokeColor(colors.Color(0.9, 0.9, 0.9))
         c.setLineWidth(0.5)
-        c.line(margin_x + 10, y - 5, margin_x + content_w - 10, y - 5)
-        return y - 8
- 
+        c.line(margin_x + 10, y - 8, margin_x + content_w - 10, y - 8)
+        return y - 18
+
     def draw_servico_row(c, y, linha, margin_x, content_w):
         """Desenha uma linha de serviço."""
         c.setFont("Helvetica", 7.5)
@@ -745,21 +745,21 @@ def gerar_pdf_fechamento(dados: Fechamento) -> bytes:
         c.setStrokeColor(colors.Color(0.93, 0.93, 0.93))
         c.setLineWidth(0.3)
         c.line(margin_x + 10, y - 8, margin_x + content_w - 10, y - 8)
- 
+
     # Desenhar seção header + tabela
     # Calcular altura total necessária para a seção (com borda)
     if num_linhas <= linhas_primeira_pag:
         # Tudo cabe na primeira página
         section_h = section_header_h + header_table_h + num_linhas * row_h + 15
         y_cursor -= section_h
- 
+
         c.setStrokeColor(colors.Color(0.85, 0.85, 0.85))
         c.setLineWidth(0.8)
         draw_rounded_rect(c, margin_x, y_cursor, content_w, section_h, radius=8)
- 
+
         draw_servicos_header(c, y_cursor + section_h - section_header_h, margin_x, content_w)
         table_y = draw_table_header(c, y_cursor + section_h - section_header_h - header_table_h, margin_x)
- 
+
         for i, linha in enumerate(linhas_servicos):
             row_y = table_y - i * row_h
             draw_servico_row(c, row_y, linha, margin_x, content_w)
@@ -770,7 +770,7 @@ def gerar_pdf_fechamento(dados: Fechamento) -> bytes:
         draw_servicos_header(c, y_cursor, margin_x, content_w)
         y_cursor -= header_table_h
         table_y = draw_table_header(c, y_cursor + header_table_h - 5, margin_x)
- 
+
         idx = 0
         for i in range(linhas_primeira_pag):
             if idx >= num_linhas:
@@ -778,23 +778,23 @@ def gerar_pdf_fechamento(dados: Fechamento) -> bytes:
             row_y = table_y - i * row_h
             draw_servico_row(c, row_y, linhas_servicos[idx], margin_x, content_w)
             idx += 1
- 
+
         # Páginas seguintes
         while idx < num_linhas:
             c.showPage()
             y_cursor = height - 40
- 
+
             linhas_por_pag = int((y_cursor - 80) / row_h)
             y_cursor -= header_table_h
             table_y = draw_table_header(c, y_cursor + header_table_h - 5, margin_x)
- 
+
             for i in range(linhas_por_pag):
                 if idx >= num_linhas:
                     break
                 row_y = table_y - i * row_h
                 draw_servico_row(c, row_y, linhas_servicos[idx], margin_x, content_w)
                 idx += 1
- 
+
     # ═══════════════════════════════════════════════════════════════
     # PÁGINAS INDIVIDUAIS: CADA OS
     # ═══════════════════════════════════════════════════════════════
@@ -802,34 +802,34 @@ def gerar_pdf_fechamento(dados: Fechamento) -> bytes:
         c.showPage()
         # Reutiliza a função gerar_pdf mas no mesmo canvas
         _gerar_os_no_canvas(c, ordem, empresa, width, height, margin_x, content_w)
- 
+
     c.save()
     buffer.seek(0)
     return buffer.read()
- 
- 
+
+
 def _gerar_os_no_canvas(c, os_data, empresa, width, height, margin_x, content_w):
     """Gera uma OS individual dentro de um canvas existente (sem salvar)."""
- 
+
     if os_data.fotos is None:
         os_data.fotos = []
     if os_data.servicos is None:
         os_data.servicos = []
- 
+
     y_cursor = height - 40
- 
+
     # CABEÇALHO DA EMPRESA
     header_h = 90
     y_cursor -= header_h
     c.setStrokeColor(colors.Color(0.85, 0.85, 0.85))
     c.setLineWidth(0.8)
     draw_rounded_rect(c, margin_x, y_cursor, content_w, header_h, radius=8)
- 
+
     logo_img = load_logo(empresa)
     logo_x = margin_x + 15
     logo_y = y_cursor + 12
     logo_w, logo_h = 90, 65
- 
+
     if logo_img:
         try:
             c.drawImage(logo_img, logo_x, logo_y, width=logo_w, height=logo_h,
@@ -843,7 +843,7 @@ def _gerar_os_no_canvas(c, os_data, empresa, width, height, margin_x, content_w)
         c.setFillColor(colors.Color(0.6, 0.6, 0.6))
         c.setFont("Helvetica", 8)
         c.drawCentredString(logo_x + logo_w / 2, logo_y + logo_h / 2, "LOGO")
- 
+
     info_x = margin_x + 130
     info_y = y_cursor + header_h - 28
     c.setFillColor(colors.Color(0.2, 0.2, 0.2))
@@ -853,9 +853,9 @@ def _gerar_os_no_canvas(c, os_data, empresa, width, height, margin_x, content_w)
     c.setFillColor(colors.Color(0.35, 0.35, 0.35))
     c.drawString(info_x, info_y - 18, empresa.endereco)
     c.drawString(info_x, info_y - 34, empresa.telefone)
- 
+
     y_cursor -= 15
- 
+
     # ORDEM DE SERVIÇO
     os_section_h = 105
     y_cursor -= os_section_h
@@ -864,11 +864,11 @@ def _gerar_os_no_canvas(c, os_data, empresa, width, height, margin_x, content_w)
     draw_rounded_rect(c, margin_x, y_cursor, content_w, os_section_h, radius=8)
     draw_section_header(c, margin_x, y_cursor + os_section_h - 30, content_w,
                         f"Ordem de serviço - {os_data.numero_os}", icon_type="clipboard")
- 
+
     campos_y = y_cursor + os_section_h - 52
     col1_x = margin_x + 15
     col2_x = margin_x + content_w * 0.33
- 
+
     # Coluna esquerda
     c.setFont("Helvetica-Bold", 8.5)
     c.setFillColor(colors.Color(0.2, 0.2, 0.2))
@@ -876,7 +876,7 @@ def _gerar_os_no_canvas(c, os_data, empresa, width, height, margin_x, content_w)
     c.setFont("Helvetica", 8.5)
     c.setFillColor(colors.Color(0.4, 0.4, 0.4))
     c.drawString(col1_x + 70, campos_y, os_data.cnpj_cliente)
- 
+
     campos_y -= 16
     c.setFont("Helvetica-Bold", 8.5)
     c.setFillColor(colors.Color(0.2, 0.2, 0.2))
@@ -884,7 +884,7 @@ def _gerar_os_no_canvas(c, os_data, empresa, width, height, margin_x, content_w)
     c.setFont("Helvetica", 8.5)
     c.setFillColor(colors.Color(0.4, 0.4, 0.4))
     c.drawString(col1_x + 70, campos_y, os_data.placa_cavalo)
- 
+
     campos_y -= 16
     c.setFont("Helvetica-Bold", 8.5)
     c.setFillColor(colors.Color(0.2, 0.2, 0.2))
@@ -892,18 +892,18 @@ def _gerar_os_no_canvas(c, os_data, empresa, width, height, margin_x, content_w)
     c.setFont("Helvetica", 8.5)
     c.setFillColor(colors.Color(0.4, 0.4, 0.4))
     c.drawString(col1_x + 70, campos_y, os_data.data_realizacao)
- 
+
     # Coluna direita
     campos_y = y_cursor + os_section_h - 52
     val_x = col2_x + 70
     max_col2_w = margin_x + content_w - val_x - 10
- 
+
     c.setFont("Helvetica-Bold", 8.5)
     c.setFillColor(colors.Color(0.2, 0.2, 0.2))
     c.drawString(col2_x, campos_y, "Razão Social: ")
     c.setFillColor(colors.Color(0.4, 0.4, 0.4))
     draw_text_fit(c, val_x, campos_y, os_data.razao_social, max_col2_w)
- 
+
     campos_y -= 16
     c.setFont("Helvetica-Bold", 8.5)
     c.setFillColor(colors.Color(0.2, 0.2, 0.2))
@@ -911,7 +911,7 @@ def _gerar_os_no_canvas(c, os_data, empresa, width, height, margin_x, content_w)
     c.setFont("Helvetica", 8.5)
     c.setFillColor(colors.Color(0.4, 0.4, 0.4))
     c.drawString(val_x, campos_y, os_data.placa_carreta or "")
- 
+
     campos_y -= 16
     loc_text = ""
     if os_data.latitude and os_data.longitude:
@@ -921,9 +921,9 @@ def _gerar_os_no_canvas(c, os_data, empresa, width, height, margin_x, content_w)
     c.drawString(col2_x, campos_y, "Loc.: ")
     c.setFillColor(colors.Color(0.4, 0.4, 0.4))
     draw_text_fit(c, col2_x + 25, campos_y, loc_text, max_col2_w + 45)
- 
+
     y_cursor -= 15
- 
+
     # FOTOS
     if os_data.fotos:
         num_fotos = len(os_data.fotos)
@@ -932,24 +932,24 @@ def _gerar_os_no_canvas(c, os_data, empresa, width, height, margin_x, content_w)
         foto_h = foto_w * 0.7
         num_rows = (num_fotos + fotos_per_row - 1) // fotos_per_row
         fotos_section_h = 40 + num_rows * (foto_h + 15) + 10
- 
+
         if y_cursor - fotos_section_h < 60:
             c.showPage()
             y_cursor = height - 40
- 
+
         y_cursor -= fotos_section_h
         c.setStrokeColor(colors.Color(0.85, 0.85, 0.85))
         c.setLineWidth(0.8)
         draw_rounded_rect(c, margin_x, y_cursor, content_w, fotos_section_h, radius=8)
         draw_section_header(c, margin_x, y_cursor + fotos_section_h - 30, content_w,
                             "Fotos registradas", icon_type="camera")
- 
+
         for i, foto in enumerate(os_data.fotos):
             row = i // fotos_per_row
             col = i % fotos_per_row
             fx = margin_x + 20 + col * (foto_w + 10)
             fy = y_cursor + fotos_section_h - 50 - row * (foto_h + 15)
- 
+
             img = load_image(foto)
             if img:
                 try:
@@ -969,25 +969,25 @@ def _gerar_os_no_canvas(c, os_data, empresa, width, height, margin_x, content_w)
                 c.setFillColor(colors.Color(0.6, 0.6, 0.6))
                 c.setFont("Helvetica", 8)
                 c.drawCentredString(fx + foto_w / 2, fy - foto_h / 2, "Foto indisponível")
- 
+
         y_cursor -= 15
- 
+
     # SERVIÇOS REALIZADOS
     if os_data.servicos:
         num_servicos = len(os_data.servicos)
         servicos_section_h = 45 + num_servicos * 22 + 30
- 
+
         if y_cursor - servicos_section_h < 60:
             c.showPage()
             y_cursor = height - 40
- 
+
         y_cursor -= servicos_section_h
         c.setStrokeColor(colors.Color(0.85, 0.85, 0.85))
         c.setLineWidth(0.8)
         draw_rounded_rect(c, margin_x, y_cursor, content_w, servicos_section_h, radius=8)
         draw_section_header(c, margin_x, y_cursor + servicos_section_h - 30, content_w,
                             "Serviços realizados", icon_type="checklist")
- 
+
         table_y = y_cursor + servicos_section_h - 50
         c.setFont("Helvetica-Bold", 8.5)
         c.setFillColor(colors.Color(0.35, 0.35, 0.35))
@@ -996,7 +996,7 @@ def _gerar_os_no_canvas(c, os_data, empresa, width, height, margin_x, content_w)
         c.setStrokeColor(colors.Color(0.9, 0.9, 0.9))
         c.setLineWidth(0.5)
         c.line(margin_x + 15, table_y - 5, margin_x + content_w - 15, table_y - 5)
- 
+
         total = 0.0
         item_y = table_y - 22
         for servico in os_data.servicos:
@@ -1008,26 +1008,26 @@ def _gerar_os_no_canvas(c, os_data, empresa, width, height, margin_x, content_w)
             c.setStrokeColor(colors.Color(0.93, 0.93, 0.93))
             c.line(margin_x + 15, item_y - 6, margin_x + content_w - 15, item_y - 6)
             item_y -= 22
- 
+
         c.setFont("Helvetica-Bold", 10)
         c.setFillColor(colors.Color(0.15, 0.15, 0.15))
         c.drawRightString(margin_x + content_w - 20, item_y, formatar_valor(total))
- 
- 
+
+
 # ─── Endpoints ───────────────────────────────────────────────────────
- 
+
 @app.post("/gerar-os")
 async def gerar_ordem_servico(os_data: OrdemServico, _key: str = Depends(verificar_api_key)):
     """
     Gera PDF da Ordem de Serviço e retorna em base64.
- 
+
     O Bubble pode chamar este endpoint via API Connector,
     enviar os dados como JSON e receber o PDF codificado em base64.
     """
     try:
         pdf_bytes = gerar_pdf(os_data)
         pdf_base64 = base64.b64encode(pdf_bytes).decode("utf-8")
- 
+
         return JSONResponse(content={
             "success": True,
             "pdf_base64": pdf_base64,
@@ -1036,8 +1036,8 @@ async def gerar_ordem_servico(os_data: OrdemServico, _key: str = Depends(verific
         })
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao gerar PDF: {str(e)}")
- 
- 
+
+
 @app.post("/gerar-os/download")
 async def gerar_ordem_servico_download(os_data: OrdemServico, _key: str = Depends(verificar_api_key)):
     """
@@ -1055,8 +1055,8 @@ async def gerar_ordem_servico_download(os_data: OrdemServico, _key: str = Depend
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao gerar PDF: {str(e)}")
- 
- 
+
+
 @app.post("/gerar-fechamento")
 async def gerar_fechamento(dados: Fechamento, _key: str = Depends(verificar_api_key)):
     """
@@ -1066,7 +1066,7 @@ async def gerar_fechamento(dados: Fechamento, _key: str = Depends(verificar_api_
     try:
         pdf_bytes = gerar_pdf_fechamento(dados)
         pdf_base64 = base64.b64encode(pdf_bytes).decode("utf-8")
- 
+
         return JSONResponse(content={
             "success": True,
             "pdf_base64": pdf_base64,
@@ -1075,15 +1075,15 @@ async def gerar_fechamento(dados: Fechamento, _key: str = Depends(verificar_api_
         })
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao gerar fechamento: {str(e)}")
- 
- 
+
+
 @app.get("/health")
 async def health():
     return {"status": "ok", "timestamp": datetime.now().isoformat()}
- 
- 
+
+
 # ─── Execução local ─────────────────────────────────────────────────
- 
+
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8000))
